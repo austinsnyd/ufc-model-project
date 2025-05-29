@@ -1,0 +1,120 @@
+---
+title: "UFC_RF_2"
+author: "Austin Snyder"
+date: "`r Sys.Date()`"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(randomForest)
+library(dplyr)
+library(xgboost)
+library(caret)
+```
+
+```{r}
+# Load fresh dataset
+ufc_rf_data <- readRDS("ufc_men_imp.rds")
+# Remove non-informative columns
+ufc_rf_data <- ufc_rf_data %>% select(-Date, -Location, -Country)
+
+# Ensure Winner is a factor
+ufc_rf_data$Winner <- as.factor(ufc_rf_data$Winner)
+
+```
+
+
+```{r}
+# Train-Test Split (80-20)
+set.seed(1616)
+train_index <- createDataPartition(ufc_rf_data$Winner, p = 0.8, list = FALSE)
+train_data_rf <- ufc_rf_data[train_index, ]
+test_data_rf <- ufc_rf_data[-train_index, ]
+
+# Create new features focused on Blue fighters
+train_data_rf <- train_data_rf %>%
+  mutate(
+    BlueAggression = (BlueAvgSigStrPct + BlueAvgTDPct) / 2,  # Striking + Takedowns
+    BlueExperience = BlueWinsByDecisionUnanimous + BlueWinsByKO + BlueWinsBySubmission,  # Total key wins
+    BlueUnderdogScore = BlueDecOdds / RedDecOdds  # Relative odds (higher = bigger underdog)
+  )
+
+```
+
+
+```{r}
+# Adjust class weighting to favor Blue wins
+set.seed(1616)
+rf_model_blue_focus <- randomForest(
+  formula = Winner ~ ., 
+  data = train_data_rf, 
+  ntree = 500, 
+  mtry = 4, 
+  nodesize = 3, 
+  classwt = c(2, 1),  # More weight on Blue
+  importance = TRUE
+)
+
+# Print model summary
+print(rf_model_blue_focus)
+
+# Evaluate Out-of-Bag (OOB) accuracy
+oob_error <- rf_model_blue_focus$err.rate[500, 1]
+oob_accuracy <- 1 - oob_error
+print(paste("Balanced Model OOB Accuracy:", round(oob_accuracy * 100, 2), "%"))
+```
+
+```{r}
+# Extract feature importance and sort
+importance_df <- data.frame(Feature = rownames(importance(rf_model_blue_focus)), 
+                            MeanDecreaseGini = importance(rf_model_blue_focus)[, "MeanDecreaseGini"])
+importance_df <- importance_df[order(-importance_df$MeanDecreaseGini), ]
+
+# Print the top 15 features
+print(head(importance_df, 15))
+
+```
+
+```{r}
+# Apply the same feature transformations to test data
+test_data_rf <- test_data_rf %>%
+  mutate(
+    BlueAggression = (BlueAvgSigStrPct + BlueAvgTDPct) / 2,
+    BlueExperience = BlueWinsByDecisionUnanimous + BlueWinsByKO + BlueWinsBySubmission,
+    BlueUnderdogScore = BlueDecOdds / RedDecOdds
+  )
+
+# Evaluate performance on test set
+test_predictions <- predict(rf_model_blue_focus, newdata = test_data_rf, type = "class")
+conf_matrix <- table(test_predictions, test_data_rf$Winner)
+
+# Calculate test accuracy
+test_accuracy <- sum(diag(conf_matrix)) / sum(conf_matrix)
+print(paste("Final Test Accuracy (Blue Focus Model):", round(test_accuracy * 100, 2), "%"))
+
+# Display confusion matrix
+print(conf_matrix)
+
+
+```
+
+
+```{r}
+# Generate probability predictions
+rf_probabilities <- predict(rf_model_blue_focus, newdata = test_data_rf, type = "prob")
+
+# Extract probabilities for the positive class (Red wins)
+rf_pred_probs <- rf_probabilities[, "Red"]
+
+# Compute ROC curve
+rf_roc_obj <- roc(test_data_rf$Winner, rf_pred_probs)
+
+# Print AUC value
+rf_auc <- auc(rf_roc_obj)
+print(paste("Random Forest AUC:", round(rf_auc, 4)))
+
+```
+
