@@ -1,0 +1,357 @@
+---
+title: "UFC_Data_Prep"
+author: "Austin Snyder"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(dplyr)
+library(ggplot2)
+library(ggcorrplot)
+library(gridExtra)
+library(caret)
+library(moments) 
+library(reshape2)
+library(knitr)
+```
+
+## Import Data
+```{r}
+ufc_men <- readRDS("ufc_men_cleaned.rds")
+```
+
+#Fixing rank 
+- By nature, there are alot of NA's in the rank columns we will remove them. 
+
+```{r}
+rank_cols_numeric <- c("RMatchWCRank", "RWFlyweightRank", "RWFeatherweightRank", "RWStrawweightRank",
+                       "RWBantamweightRank", "RHeavyweightRank", "RLightHeavyweightRank", "RMiddleweightRank",
+                       "RWelterweightRank", "RLightweightRank", "RFeatherweightRank", "RBantamweightRank",
+                       "RFlyweightRank", "RPFPRank", "BWFlyweightRank", "BWFeatherweightRank", "BWStrawweightRank",
+                       "BWBantamweightRank", "BHeavyweightRank", "BLightHeavyweightRank", "BMiddleweightRank",
+                       "BWelterweightRank", "BLightweightRank", "BFeatherweightRank", "BBantamweightRank",
+                       "BFlyweightRank", "BPFPRank","BMatchWCRank")
+
+# Remove rank-related columns
+ufc_men <- ufc_men[, !(names(ufc_men) %in% rank_cols_numeric)]
+
+```
+
+
+
+
+## Transformations 
+```{r}
+# List your numeric features
+numeric_features <- c("RedOdds", "BlueOdds", "OddsRatio", "RedExpectedValue", "BlueExpectedValue", 
+                      "SigStrDif", "AvgTDDif", "KODif", "SubDif", "ReachDif", 
+                      "WinDif", "LossDif", "TotalTitleBoutDif", "AgeDif")
+
+# Melt the data
+ufc_men_melted <- melt(ufc_men, measure.vars = numeric_features)
+
+# Facet density plots
+ggplot(ufc_men_melted, aes(x = value)) +
+  geom_density(fill = "blue", alpha = 0.5) +
+  facet_wrap(~variable, scales = "free", ncol = 4) +  # Adjust ncol to fit your layout
+  labs(title = "Density Plots of Numeric Features",
+       x = "",
+       y = "Density") +
+  theme_minimal() +
+  theme(
+    strip.text.x = element_text(size = 8),  # Adjust facet label size
+    plot.title = element_text(hjust = 0.5)
+  )
+```
+
+### Check For Skewness
+
+```{r}
+
+# Compute skewness for numeric columns
+skew_values <- sapply(ufc_men[numeric_features], skewness, na.rm = TRUE)
+
+# Print skewness values
+print(skew_values)
+
+```
+-Odds Ratio log transformation 
+- Red EV log transformation
+- Blue EV log transformation
+- ReachDif log transformation
+- TotalTitleBoutDif log transformation
+
+### Log Transformation
+
+```{r}
+# List of Features to Log Transform
+log_transform_features <- c("OddsRatio", "RedExpectedValue", "BlueExpectedValue", 
+                            "ReachDif", "TotalTitleBoutDif")
+
+# Apply Log Transformation Correctly
+for (feature in log_transform_features) {
+  log_feature <- paste0("Log_", feature)  # Generate new log feature name
+  
+  # Ensure log transformation is applied correctly
+  ufc_men[[log_feature]] <- log1p(abs(ufc_men[[feature]]))  
+}
+
+```
+
+
+```{r}
+
+# Define colors manually to keep consistency
+fighter_colors <- c("Red" = "#E63946", "Blue" = "#457B9D", "neither" = "#A8DADC")
+
+# List categorical features to plot
+categorical_features <- c("Winner", "WeightClass", "BetterRank", "Finish")
+
+# Generate plots with formatting adjustments
+plot_list_cat <- lapply(categorical_features, function(feature) {
+  ggplot(ufc_men, aes_string(x = feature, fill = feature)) +
+    geom_bar() +
+    labs(title = paste("Distribution of", feature), x = feature, y = "Count") +
+    theme_minimal() +
+    theme(
+      axis.text.x = element_text(angle = 30, hjust = 1, size = 10),  # Rotate x-axis labels
+      axis.title = element_text(size = 12),  # Increase axis label size
+      plot.title = element_text(size = 14, face = "bold")  # Increase title size
+    ) +
+    scale_fill_manual(values = fighter_colors)  # Apply consistent colors
+})
+
+# Arrange plots neatly
+do.call(grid.arrange, c(plot_list_cat, ncol = 2))
+
+
+```
+
+- collapse decision for simplification
+```{r}
+ufc_men$Finish <- as.character(ufc_men$Finish)
+
+ufc_men$Finish <- dplyr::recode(ufc_men$Finish,
+                                "KO/TKO" = "KO",
+                                "SUB" = "Submission",
+                                "U-DEC" = "Decision",
+                                "M-DEC" = "Decision",
+                                "S-DEC" = "Decision",
+                                .default = "UNKNOWN")  
+
+# Convert back to factor
+ufc_men$Finish <- as.factor(ufc_men$Finish)
+
+
+```
+- Here we combined all the decision finishes into one category. 
+
+## Missing Values 
+
+```{r}
+colSums(is.na(ufc_men))
+```
+
+```{r}
+missing_data <- data.frame(
+  Feature = c("RedOdds", "BlueOdds", "RedExpectedValue", "BlueExpectedValue", 
+              "BlueAvgSigStrLanded", "BlueAvgSigStrPct", "BlueAvgSubAtt", "BlueAvgTDLanded", "BlueAvgTDPct", 
+              "RedAvgSigStrLanded", "RedAvgSigStrPct", "RedAvgSubAtt", "RedAvgTDLanded", "RedAvgTDPct",
+              "FinishDetails", "FinishRound", "FinishRoundTime", 
+              "TotalFightTimeSecs", "RedDecOdds", "BlueDecOdds", "RSubOdds", "BSubOdds", "RKOOdds", "BKOOdds", 
+              "OddsRatio", "EVRatio", "LogOddsRatio", "LogEVRatio", "Log_OddsRatio", 
+              "Log_RedExpectedValue", "Log_BlueExpectedValue"),
+  Count = c(169, 167, 169, 167, 
+            819, 680, 737, 738, 745, 
+            394, 312, 312, 312, 320, 
+            3087, 517, 517, 
+            517, 996, 1025, 1231, 1255, 1229, 1256, 
+            177, 177, 177, 177, 177, 
+            169, 167),
+  Percentage = round(c(169, 167, 169, 167, 
+                       819, 680, 737, 738, 745, 
+                       394, 312, 312, 312, 320, 
+                       3087, 517, 517, 
+                       517, 996, 1025, 1231, 1255, 1229, 1256, 
+                       177, 177, 177, 177, 177, 
+                       169, 167) / 5726 * 100, 2)  # Assuming total observations = 5726
+)
+
+# Display as a nicely formatted table
+kable(missing_data, caption = "Summary of Missing Values in UFC Dataset", digits = 2)
+```
+
+
+
+### Imputation for continuous factors
+- My distributions are all skewed so I will use the median to impute missing values. 
+
+```{r}
+numeric_impute_features <- c("BlueAvgSigStrLanded", "BlueAvgSigStrPct", "BlueAvgSubAtt", 
+                             "BlueAvgTDLanded", "BlueAvgTDPct", "RedAvgSigStrLanded", 
+                             "RedAvgSigStrPct", "RedAvgSubAtt", "RedAvgTDLanded", "RedAvgTDPct")
+
+
+for (feature in numeric_impute_features) {
+  ufc_men[[feature]][is.na(ufc_men[[feature]])] <- median(ufc_men[[feature]], na.rm = TRUE)
+}
+```
+
+
+### Imputration for categorical factors
+
+- FinishDetails is a categorical variable that has a high percentage of missing
+values. NA's make up 53.92% of the data so I will remove this feature from the data set. 
+
+-  For finish round and finish round time, I will impute the mode. 
+
+```{r}
+# Remove FinishDetails
+##fc_men <- ufc_men %>% select(-FinishDetails)  # Remove the column
+
+fill_mode <- function(x) names(sort(table(x), decreasing = TRUE))[1]
+
+# Apply mode imputation
+ufc_men$FinishRound[is.na(ufc_men$FinishRound)] <- fill_mode(ufc_men$FinishRound)
+ufc_men$FinishRoundTime[is.na(ufc_men$FinishRoundTime)] <- fill_mode(ufc_men$FinishRoundTime)
+```
+
+
+## Imputing odds as well 
+
+```{r}
+median_impute_features <- c("RedOdds","BlueOdds", "RedExpectedValue",
+                            "BlueExpectedValue","TotalFightTimeSecs", 
+                             "RedDecOdds", "BlueDecOdds",
+                            "RSubOdds", "BSubOdds", "RKOOdds", "BKOOdds")
+
+for (feature in median_impute_features) {
+  ufc_men[[feature]][is.na(ufc_men[[feature]])] <- median(ufc_men[[feature]], na.rm = TRUE)
+}
+```
+
+
+```{r}
+ufc_men$OddsRatio <- abs(ufc_men$RedOdds / ufc_men$BlueOdds)
+ufc_men$EVRatio <- abs(ufc_men$RedExpectedValue / ufc_men$BlueExpectedValue)
+```
+
+
+```{r}
+log_features <- c("OddsRatio", "EVRatio", "RedExpectedValue", "BlueExpectedValue")
+
+for (feature in log_features) {
+  log_feature <- paste0("Log_", feature)  # Create log version name
+  ufc_men[[log_feature]] <- log1p(abs(ufc_men[[feature]]))  # Apply log transformation safely
+}
+
+```
+
+### Remove old log features
+```{r}
+ufc_men <- ufc_men %>% select(-LogOddsRatio , -LogEVRatio, )
+```
+
+
+```{r}
+colSums(is.na(ufc_men))
+```
+
+### save new data set
+
+```{r}
+## for others
+write.csv(ufc_men, "ufc_men_cleaned.csv", row.names = FALSE)
+
+## for me
+saveRDS(ufc_men, "ufc_men_imputed.rds")
+```
+
+
+## Feaature Slection
+
+```{r}
+ufc_men_imputed <- readRDS("ufc_men_imputed.rds")
+```
+
+
+```{r}
+# Select only numeric features
+numeric_features <- names(ufc_men_imputed)[sapply(ufc_men_imputed, is.numeric)]
+
+# Compute correlation matrix
+cor_matrix <- cor(ufc_men_imputed[numeric_features], use = "complete.obs")
+
+cor_long <- as.data.frame(as.table(cor_matrix))
+
+# Filter for high correlations (above 0.8, but exclude self-correlations of 1)
+high_correlations <- cor_long %>%
+  filter(abs(Freq) > 0.8 & Var1 != Var2) %>%
+  arrange(desc(abs(Freq)))
+
+# Print only the highly correlated pairs
+kable(high_correlations, caption = "Highly Correlated Features (>|0.8|)")
+
+```
+
+### drop higly correleated and redundant features 
+
+- There are many highly correlated and redundant features in the data set.
+- Some variables like differences used two existing variables therefore 
+  will be redundant and not suitable for logistic regression. 
+
+```{r}
+features_to_drop <- c(
+  "RedExpectedValue", "BlueExpectedValue", "EVRatio", "OddsRatio",
+  "RedOdds", "BlueOdds", "RedWins", "RedTotalRoundsFought",
+  "RedLosses", "RedLongestWinStreak", "BlueReachCms", "FinishDetails",
+  "Gender", "FinishRoundTime", "Log_BlueExpectedValue",
+  "TotalTitleBoutDif",  # Redundant due to BlueTotalTitleBouts
+  "KODif",  # Redundant due to RedWinsByKO & BlueWinsByKO
+  "SubDif",  # Redundant due to RedWinsBySubmission & BlueWinsBySubmission
+  "HeightDif",  # Redundant due to RedHeightCms & BlueHeightCms
+  "BlueAvgSubAtt", "RedAvgSubAtt", "AvgSubAttDif",
+  "BlueWeightLbs", "RedWeightLbs",  # Redundant with WeightClass
+  "Log_RedExpectedValue",  # Drop in favor of Log_EVRatio
+  "BlueAvgTDLanded", "RedAvgTDLanded", "AvgTDDif",
+  "BlueAvgSigStrLanded", "RedAvgSigStrLanded", "SigStrDif",
+  "BlueWins", "WinDif",
+  "BlueTotalRoundsFought", "TotalRoundDif", "WinStreakDif"
+)
+
+ufc_men_imputed <- ufc_men_imputed[, !(names(ufc_men_imputed) %in% features_to_drop)]
+```
+
+### Save cleaned data set
+```{r}
+saveRDS(ufc_men_imputed, "ufc_men_imp.rds")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
