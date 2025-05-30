@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Using Machine Learning to Predict UFC Match Outcomes</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f8f9fa;
+      color: #2c2c2c;
+      line-height: 1.6;
+      margin: 0;
+      padding: 0;
+    }
+
+    .container {
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      background-color: #ffffff;
+      border-radius: 10px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+    }
+
+    h1 {
+      font-size: 2em;
+      color: #1a1a1a;
+      margin-bottom: 10px;
+    }
+
+    h2 {
+      color: #333333;
+      margin-top: 30px;
+      border-bottom: 1px solid #ddd;
+      padding-bottom: 5px;
+    }
+
+    ul {
+      list-style-type: none;
+      padding-left: 0;
+    }
+
+    li {
+      margin-bottom: 10px;
+    }
+
+    a {
+      text-decoration: none;
+      color: #0077cc;
+      font-weight: 600;
+      transition: color 0.2s ease-in-out;
+    }
+
+    a:hover {
+      color: #0056a3;
+      text-decoration: underline;
+    }
+
+    p {
+      margin-bottom: 1.2em;
+    }
+
+    footer {
+      text-align: center;
+      font-size: 0.9em;
+      color: #888;
+      margin-top: 50px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>Using Machine Learning to Predict UFC Match Outcomes</h1>
+
+    <h2>🔍 Overview</h2>
+    <p>
+      This project applies machine learning models to predict UFC fight outcomes using historical data and statistical features.
+      Drawing from over 5,000 fights, the analysis explores how attributes such as striking accuracy, takedown percentage,
+      betting odds, and fighter experience contribute to win probabilities. Models include Logistic Regression, Random Forest,
+      and XGBoost — each evaluated based on predictive performance, interpretability, and AUC scores.
+    </p>
+    <p>
+      Betting odds were the strongest predictor of outcomes, followed by striking accuracy and experience. While all models performed moderately well, Random Forest achieved the highest test accuracy (67.4%) and strongest AUC (.7228). Challenges included red-corner win bias, class imbalance, and limited granularity of fight data. Future work could include deep learning models and odds-independent analysis for sports betting use cases.
+    </p>
+
+    <h2>📝 Final Write-Up (PDF)</h2>
+    <p><a href="writeup/da_final.pdf" target="_blank">Download/View Full Project Report (PDF)</a></p>
+
+    <h2>🧪 Analysis Reports (HTML)</h2>
+    <ul>
+      <li><a href="analysis/UFC_Data_Prep.html">Data Preparation</a></li>
+      <li><a href="analysis/UFC_EDA.html">Exploratory Data Analysis</a></li>
+      <li><a href="analysis/UFC_log_reg.html">Logistic Regression</a></li>
+      <li><a href="analysis/UFC_RF_2.html">Random Forest</a></li>
+      <li><a href="analysis/UFC_boost.html">XGBoost Model</a></li>
+    </ul>
+
+    <h2>📄 Source Code (RMarkdown Files)</h2>
+    <ul>
+      <li><a href="code/UFC_Data_Prep.Rmd">UFC_Data_Prep.Rmd</a></li>
+      <li><a href="code/UFC_EDA.Rmd">UFC_EDA.Rmd</a></li>
+      <li><a href="code/UFC_log_reg.Rmd">UFC_log_reg.Rmd</a></li>
+      <li><a href="code/UFC_RF.Rmd">UFC_RF.Rmd</a></li>
+      <li><a href="code/UFC_RF_2.Rmd">UFC_RF_2.Rmd</a></li>
+      <li><a href="code/UFC_boost.Rmd">UFC_boost.Rmd</a></li>
+    </ul>
+
+    <h2>📂 Dataset</h2>
+    <p><a href="data/ufc_men.xlsx" download>Download Excel Dataset (ufc_men.xlsx)</a></p>
+
+    <footer>
+      Created by Austin Snyder | MS in Data Analytics, Oregon State University
+    </footer>
+  </div>
+</body>
+</html>
